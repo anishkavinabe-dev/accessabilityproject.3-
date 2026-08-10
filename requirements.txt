@@ -1,6 +1,5 @@
 streamlit
 numpy
 opencv-python-headless
-mediapipe
-scikit-learn
+mediapipe==0.10.14
 joblib
