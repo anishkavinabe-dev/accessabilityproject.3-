@@ -1,14 +1,15 @@
 import streamlit as st
+import av
 import cv2
 import numpy as np
 import joblib
 import mediapipe as mp
-from PIL import Image
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 
 # Page Configuration
 st.set_page_config(page_title="ISL Live Sign Language Translation", layout="centered")
 
-st.title("ISL Live Sign Language Translation - 2 Hands")
+st.title("ISL Live Sign Language Translation - Continuous Real-Time")
 
 # Load Model Safely
 @st.cache_resource
@@ -30,30 +31,28 @@ else:
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 
-# Streamlit Cloud compatible camera input widget
-img_file = st.camera_input("Take a snapshot of your sign language gesture")
-
-if img_file is not None:
-    # Convert uploaded image buffer to a numpy array
-    image = Image.open(img_file)
-    frame = np.array(image)
+# Define Video Processor Class for Continuous Streaming
+class HandProcessor:
+    def __init__(self):
+        self.hands = mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=2,
+            min_detection_confidence=0.5,
+            min_tracking_confidence=0.5
+        )
     
-    # Process frame with MediaPipe Hands
-    with mp_hands.Hands(
-        static_image_mode=True,
-        max_num_hands=2,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5
-    ) as hands:
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
         
-        results = hands.process(frame)
+        # Convert BGR to RGB for MediaPipe processing
+        image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(image_rgb)
         
         if results.multi_hand_landmarks:
             hand_data = []
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks on the image for visual feedback
                 mp_drawing.draw_landmarks(
-                    frame, hand_landmarks, mp_hands.HAND_CONNECTIONS
+                    img, hand_landmarks, mp_hands.HAND_CONNECTIONS
                 )
                 single_hand_features = []
                 for landmark in hand_landmarks.landmark:
@@ -65,7 +64,7 @@ if img_file is not None:
             for h_feats in hand_data:
                 flat_features.extend(h_feats)
             
-            # Ensure the feature vector is strictly 126 elements (pad with zeros if only 1 hand is present)
+            # Ensure the feature vector is strictly 126 elements (pad with zeros if needed)
             if len(flat_features) < 126:
                 flat_features.extend([0.0] * (126 - len(flat_features)))
             elif len(flat_features) > 126:
@@ -73,15 +72,31 @@ if img_file is not None:
                 
             features = np.array(flat_features).reshape(1, -1)
             
-            # Display the frame with drawn hand landmarks
-            st.image(frame, channels="RGB", caption="Processed Hand Landmarks")
-            
-            # Run prediction through the loaded model
+            # Run prediction through the model and overlay text onto the live video feed
             if model is not None:
                 try:
                     prediction = model.predict(features)
-                    st.markdown(f"### Predicted Sign: **{prediction[0]}**")
+                    cv2.putText(
+                        img, 
+                        f"Sign: {prediction[0]}", 
+                        (30, 50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 
+                        1, 
+                        (0, 255, 0), 
+                        2, 
+                        cv2.LINE_AA
+                    )
                 except Exception as e:
-                    st.error(f"Prediction error: {e}")
-        else:
-            st.warning("No hands detected in the frame. Please make sure both hands are clearly visible and try again.")
+                    pass
+                    
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+# Start WebRTC Live Stream Component
+webrtc_streamer(
+    key="isl-translation",
+    mode=WebRtcMode.SENDRECV,
+    rtc_configuration=RTCConfiguration({"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}),
+    video_processor_factory=HandProcessor,
+    media_stream_constraints={"video": True, "audio": False},
+    async_processing=True,
+)
