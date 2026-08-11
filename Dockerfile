@@ -1,10 +1,9 @@
 FROM python:3.11-slim
 
-# Install system packages required for OpenCV and MediaPipe
+# Install updated system packages required for MediaPipe and OpenCV-headless
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
-    libgthread-2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
