@@ -16,7 +16,7 @@ st.write(
     "Allow camera access to translate sign language gestures in real-time."
 )
 
-# Load your trained model (Make sure 'model.p' or your model file is in the repo)
+# Load your trained model (Make sure your model file is in the repo)
 @st.cache_resource
 def load_model():
     try:
@@ -124,7 +124,7 @@ class SignLanguageProcessor:
         return av.VideoFrame.from_ndarray(image, format="bgr24")
 
 
-# Streamlit WebRTC Component with multiple fallback STUN servers to prevent connection drops
+# Streamlit WebRTC Component with integrated public STUN servers
 webrtc_streamer(
     key="sign-language-stream",
     mode=WebRtcMode.SENDRECV,
