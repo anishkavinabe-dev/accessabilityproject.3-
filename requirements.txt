@@ -3,3 +3,6 @@ mediapipe==0.10.14
 joblib
 numpy
 scikit-learn
+opencv-python-headless
+streamlit-webrtc
+av
