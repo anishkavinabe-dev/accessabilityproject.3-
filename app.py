@@ -3,7 +3,8 @@ import joblib
 import mediapipe as mp
 import numpy as np
 import streamlit as st
-from PIL import Image
+from streamlit_webrtc import WebRtcMode, webrtc_streamer
+import av
 
 # Page Configuration
 st.set_page_config(
@@ -12,7 +13,7 @@ st.set_page_config(
 
 st.title("🤲 Real-Time Sign Language Translator")
 st.write(
-    "Capture a photo of your sign gesture below for instant translation."
+    "Allow camera access to stream and translate sign language gestures live."
 )
 
 # Load your trained model
@@ -35,36 +36,34 @@ labels_dict = {
     # Add all your trained class mappings here
 }
 
-# Initialize MediaPipe Hands
+# Initialize MediaPipe Hands outside the class for efficiency
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 
-# Camera input widget (works perfectly on Render)
-camera_image = st.camera_input("Take a picture of your sign")
 
-if camera_image is not None:
-    # Convert the uploaded image to an OpenCV array
-    bytes_data = camera_image.getvalue()
-    cv2_img = cv2.imdecode(np.frombuffer(bytes_data, np.uint8), cv2.IMREAD_COLOR)
-    cv2_img = cv2.flip(cv2_img, 1)  # Mirror view
-    H, W, _ = cv2_img.shape
+class SignLanguageProcessor:
+    def __init__(self):
+        self.hands = mp_hands.Hands(
+            static_image_mode=False,
+            max_num_hands=1,
+            min_detection_confidence=0.7,
+            min_tracking_confidence=0.5,
+        )
 
-    image_rgb = cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB)
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        image = frame.to_ndarray(format="bgr24")
+        image = cv2.flip(image, 1)  # Mirror view
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(image_rgb)
 
-    with mp_hands.Hands(
-        static_image_mode=True,
-        max_num_hands=1,
-        min_detection_confidence=0.7,
-    ) as hands:
-        results = hands.process(image_rgb)
-        predicted_text = "No hand detected. Try again!"
+        predicted_text = "Show sign clearly..."
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw landmarks on the image
+                # Draw hand landmarks
                 mp_drawing.draw_landmarks(
-                    cv2_img,
+                    image,
                     hand_landmarks,
                     mp_hands.HAND_CONNECTIONS,
                     mp_drawing_styles.get_default_hand_landmarks_style(),
@@ -94,12 +93,12 @@ if camera_image is not None:
                             confidence = np.max(probabilities)
                             prediction = np.argmax(probabilities)
 
-                            if confidence > 0.60:
+                            if confidence > 0.70:
                                 predicted_text = labels_dict.get(
                                     int(prediction), str(prediction)
                                 )
                             else:
-                                predicted_text = "Uncertain sign. Please show clearly."
+                                predicted_text = "Translating..."
                         else:
                             prediction = model.predict(features)
                             predicted_text = labels_dict.get(
@@ -108,14 +107,34 @@ if camera_image is not None:
                     except Exception as ex:
                         predicted_text = "Prediction Error"
 
-        # Display result clearly
-        st.success(f"### Translation: {predicted_text}")
-        
-        # Show processed image with drawn hand skeleton
-        st.image(cv2.cvtColor(cv2_img, cv2.COLOR_BGR2RGB), channels="RGB", use_container_width=True)
+        # Overlay real-time translation text on video feed
+        cv2.putText(
+            image,
+            f"Sign: {predicted_text}",
+            (30, 50),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            1,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+
+        return av.VideoFrame.from_ndarray(image, format="bgr24")
+
+
+# Streamlit WebRTC Live Streamer
+webrtc_streamer(
+    key="sign-language-stream",
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=SignLanguageProcessor,
+    rtc_configuration={
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    },
+    media_stream_constraints={"video": True, "audio": False},
+)
 
 st.markdown("---")
 st.info(
-    "💡 **Tips for Best Results:** Ensure good lighting, keep your hand centered"
-    " in the frame, and perform a clear sign gesture."
+    "💡 **Tips for Best Results:** Ensure good lighting and keep your hand"
+    " centered within the camera frame."
 )
