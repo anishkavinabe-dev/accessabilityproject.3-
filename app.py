@@ -138,3 +138,22 @@ st.info(
     "💡 **Tips for Best Results:** Ensure good lighting and keep your hand"
     " centered within the camera frame."
 )
+webrtc_streamer(
+    key="sign-language-stream",
+    mode=WebRtcMode.SENDRECV,
+    video_processor_factory=SignLanguageProcessor,
+    rtc_configuration={
+        "iceServers": [
+            {"urls": ["stun:stun.l.google.com:19302"]},
+            {
+                "urls": [
+                    "turn:global.relay.metered.ca:80",
+                    "turn:global.relay.metered.ca:443",
+                ],
+                "username": "be800e03744f0a40a274fdab",
+                "credential": "wRRR0DZ7be8ghbP6",
+            },
+        ]
+    },
+    media_stream_constraints={"video": True, "audio": False},
+)
