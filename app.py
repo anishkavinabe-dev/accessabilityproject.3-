@@ -1,14 +1,14 @@
-# 1. Place these lines at the absolute top to hide console spam warnings
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-# 2. Import your required libraries
 import streamlit as st
+from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import av
 import cv2
 import numpy as np
 
-# 3. Streamlit Page Configuration
+# Streamlit Page Configuration
 st.set_page_config(
     page_title="ISL Helper",
     page_icon="🤟",
@@ -18,44 +18,39 @@ st.set_page_config(
 st.title("🤟 ISL Helper: Indian Sign Language Translator")
 st.write("Bridge the gap with real-time sign language recognition.")
 
-# 4. Sidebar controls
+# Sidebar controls
 st.sidebar.header("Configuration")
 app_mode = st.sidebar.selectbox("Choose Mode", ["Live Translation", "About Project"])
 
 if app_mode == "Live Translation":
     st.subheader("Webcam Feed")
-    
-    # Simple toggle to start/stop the camera feed state
-    run_camera = st.checkbox("Turn on Camera")
-    
-    # Placeholder for translation output
-    translation_text_placeholder = st.empty()
-    frame_placeholder = st.empty()
-    
-    # Capture webcam using OpenCV if toggled on
-    if run_camera:
-        cap = cv2.VideoCapture(0)
-        
-        while run_camera:
-            ret, frame = cap.read()
-            if not ret:
-                st.error("Failed to access webcam. Please check permissions.")
-                break
-                
-            # Convert frame color format for Streamlit
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    st.write("Click **Start** below to activate your browser webcam and begin translation.")
+
+    # Video transformer class for browser-compatible WebRTC streaming
+    class ISLTransformer(VideoTransformerBase):
+        def transform(self, frame: av.VideoFrame) -> av.VideoFrame:
+            image = frame.to_ndarray(format="bgr24")
             
-            # --- [Insert your MediaPipe / ML Prediction Logic Here] ---
-            # Example placeholder for translation output loop:
-            translated_word = "Translating..." 
+            # --- [INSERT YOUR MEDIAPIPE OR MODEL PREDICTION LOGIC HERE] ---
+            # Example: Drawing text directly onto the video feed frame
+            cv2.putText(
+                image, 
+                text="Translating...", 
+                org=(30, 50), 
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, 
+                fontScale=1, 
+                color=(0, 255, 0), 
+                thickness=2
+            )
             
-            # Update UI elements dynamically on every frame loop
-            translation_text_placeholder.markdown(f"### Translated Text: **{translated_word}**")
-            frame_placeholder.image(frame, channels="RGB", use_container_width=True)
-            
-        cap.release()
-    else:
-        st.info("Check the box above to activate your camera and start translating.")
+            return av.VideoFrame.from_ndarray(image, format="bgr24")
+
+    # WebRTC streamer component replaces OpenCV to work properly on live cloud websites
+    webrtc_streamer(
+        key="isl-helper-stream",
+        video_processor_factory=ISLTransformer,
+        rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+    )
 
 elif app_mode == "About Project":
     st.subheader("About ISL Helper")
