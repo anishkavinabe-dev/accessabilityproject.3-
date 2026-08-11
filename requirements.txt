@@ -4,3 +4,5 @@ joblib
 numpy
 opencv-python-headless
 scikit-learn
+streamlit-webrtc
+av
