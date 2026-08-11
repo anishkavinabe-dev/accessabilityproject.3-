@@ -29,15 +29,22 @@ def load_model():
 
 model = load_model()
 
-# Define your label mapping dictionary (modify keys to match your labels)
+# Define your label mapping dictionary (customize words to match your trained labels)
 labels_dict = {
     0: "Hello",
     1: "Thank You",
     2: "Yes",
     3: "No",
+    4: "Please",
+    5: "Sorry",
+    6: "Help",
+    7: "Good",
+    8: "Name",
+    9: "Water",
+    # Add any additional class mappings here as needed
 }
 
-# Initialize MediaPipe Hands for up to 2 hands
+# Initialize MediaPipe Hands for up to 2 hands (126 features total)
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -64,7 +71,6 @@ class SignLanguageProcessor:
     if results.multi_hand_landmarks:
       data_aux = []
 
-      # Loop through detected hands (up to 2) and extract (x, y, z)
       for hand_landmarks in results.multi_hand_landmarks:
         mp_drawing.draw_landmarks(
             image,
@@ -96,14 +102,14 @@ class SignLanguageProcessor:
 
             if confidence > 0.65:
               predicted_text = labels_dict.get(
-                  int(prediction), str(prediction)
+                  int(prediction), f"Sign {prediction}"
               )
             else:
               predicted_text = "Translating..."
           else:
             prediction = model.predict(features)
             predicted_text = labels_dict.get(
-                int(prediction[0]), str(prediction[0])
+                int(prediction[0]), f"Sign {prediction[0]}"
             )
         except Exception as ex:
           predicted_text = f"Err: {str(ex)[:20]}"
