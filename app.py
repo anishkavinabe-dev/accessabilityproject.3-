@@ -16,27 +16,26 @@ st.write(
     "Allow camera access to stream and translate sign language gestures live."
 )
 
-# Load your trained model
+# Load your trained model (Make sure filename matches your file: isl_model.pkl)
 @st.cache_resource
 def load_model():
     try:
-        model = joblib.load("model.p")
+        model = joblib.load("isl_model.pkl")
         return model
     except Exception as e:
         return None
 
 model = load_model()
 
-# Define your label mapping dictionary (Modify these based on your training classes)
+# Define your label mapping dictionary
 labels_dict = {
     0: "Hello",
     1: "Thank You",
     2: "Yes",
     3: "No",
-    # Add all your trained class mappings here
 }
 
-# Initialize MediaPipe Hands outside the class for efficiency
+# Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
@@ -53,7 +52,7 @@ class SignLanguageProcessor:
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         image = frame.to_ndarray(format="bgr24")
-        image = cv2.flip(image, 1)  # Mirror view
+        image = cv2.flip(image, 1)
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         results = self.hands.process(image_rgb)
 
@@ -61,7 +60,6 @@ class SignLanguageProcessor:
 
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks
                 mp_drawing.draw_landmarks(
                     image,
                     hand_landmarks,
@@ -70,7 +68,6 @@ class SignLanguageProcessor:
                     mp_drawing_styles.get_default_hand_connections_style(),
                 )
 
-                # Extract normalized coordinates
                 data_aux = []
                 x_ = []
                 y_ = []
@@ -83,11 +80,9 @@ class SignLanguageProcessor:
                     data_aux.append(landmark.x - min(x_))
                     data_aux.append(landmark.y - min(y_))
 
-                # Run prediction
                 if model is not None:
                     try:
                         features = np.asarray(data_aux).reshape(1, -1)
-
                         if hasattr(model, "predict_proba"):
                             probabilities = model.predict_proba(features)
                             confidence = np.max(probabilities)
@@ -107,7 +102,6 @@ class SignLanguageProcessor:
                     except Exception as ex:
                         predicted_text = "Prediction Error"
 
-        # Overlay real-time translation text on video feed
         cv2.putText(
             image,
             f"Sign: {predicted_text}",
@@ -122,24 +116,9 @@ class SignLanguageProcessor:
         return av.VideoFrame.from_ndarray(image, format="bgr24")
 
 
-# Streamlit WebRTC Live Streamer
+# Streamlit WebRTC Live Streamer with Custom TURN Server and Unique Key
 webrtc_streamer(
-    key="sign-language-stream",
-    mode=WebRtcMode.SENDRECV,
-    video_processor_factory=SignLanguageProcessor,
-    rtc_configuration={
-        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
-    },
-    media_stream_constraints={"video": True, "audio": False},
-)
-
-st.markdown("---")
-st.info(
-    "💡 **Tips for Best Results:** Ensure good lighting and keep your hand"
-    " centered within the camera frame."
-)
-webrtc_streamer(
-    key="sign-language-stream",
+    key="sign-language-translator-live",
     mode=WebRtcMode.SENDRECV,
     video_processor_factory=SignLanguageProcessor,
     rtc_configuration={
@@ -156,4 +135,10 @@ webrtc_streamer(
         ]
     },
     media_stream_constraints={"video": True, "audio": False},
+)
+
+st.markdown("---")
+st.info(
+    "💡 **Tips for Best Results:** Ensure good lighting and keep your hand"
+    " centered within the camera frame."
 )
